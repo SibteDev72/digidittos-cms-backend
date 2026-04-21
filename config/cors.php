@@ -17,7 +17,18 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:5004,http://localhost:3000,http://localhost:3003')),
+    // Fallback includes local dev origins + production domains so
+    // the app still boots if CORS_ALLOWED_ORIGINS env var is unset.
+    //   - http://localhost:5004        → CMS admin (Vite)
+    //   - http://localhost:3000        → business site (Next.js dev)
+    //   - http://localhost:3003        → secondary dev port
+    //   - https://www.digidittos.com   → prod business site
+    //   - https://digidittos.com       → prod apex
+    //   - https://cms.digidittos.com   → prod CMS admin
+    'allowed_origins' => explode(',', env(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:5004,http://localhost:3000,http://localhost:3003,https://www.digidittos.com,https://digidittos.com,https://cms.digidittos.com'
+    )),
 
     'allowed_origins_patterns' => [],
 
