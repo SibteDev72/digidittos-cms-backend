@@ -3,6 +3,39 @@ set -e
 
 cd /var/www
 
+# AGGRESSIVELY clear all compiled/cached files FIRST, before any
+# artisan command runs. If bootstrap/cache/config.php was baked into
+# the image during composer install, it would shadow the env vars
+# Render injects and every `env()` call would return its fallback
+# (sqlite, http://localhost, debug=false). Deleting the files
+# directly sidesteps the need to run artisan (which itself would
+# use the stale config).
+rm -f bootstrap/cache/config.php \
+      bootstrap/cache/routes-v7.php \
+      bootstrap/cache/routes.php \
+      bootstrap/cache/services.php \
+      bootstrap/cache/packages.php \
+      bootstrap/cache/events.php 2>/dev/null || true
+find storage/framework/views -type f -name "*.php" -delete 2>/dev/null || true
+echo "Cleared bootstrap + view caches."
+
+# Log which env vars the PHP process actually sees, so we can tell
+# at-a-glance in Render logs whether the dashboard's env vars are
+# reaching the container. Values are masked (only presence + length
+# shown) so secrets don't leak.
+echo "===== ENV VAR VISIBILITY ====="
+for key in APP_ENV APP_DEBUG APP_URL APP_KEY DB_CONNECTION DB_HOST DB_PORT DB_DATABASE DB_USERNAME SESSION_DRIVER CACHE_STORE; do
+    val="${!key:-}"
+    if [ -z "$val" ]; then
+        echo "  $key = <MISSING>"
+    else
+        len=${#val}
+        preview=$(echo "$val" | cut -c1-8)
+        echo "  $key = ${preview}… (len=$len)"
+    fi
+done
+echo "=============================="
+
 # APP_KEY resolution.
 #
 # In production (Render/Docker Compose with env vars) Laravel reads

@@ -24,16 +24,58 @@ use App\Http\Controllers\Api\ContactController;
 // so we can diagnose 500s without needing shell access on Render.
 // Hit GET /api/__diag to see JSON status.
 Route::get('/__diag', function () {
+    // Inspect env var plumbing at three layers so we can tell whether:
+    //   - Render is injecting vars into the PHP process at all (raw)
+    //   - Laravel's Dotenv is loading them (env() helper)
+    //   - The resulting config array reflects them (config())
+    // If `raw` has the value but `config` doesn't, there's a cache
+    // file shadowing it. If `raw` is empty, env isn't reaching PHP.
+    $keys = ['APP_ENV', 'APP_DEBUG', 'APP_URL', 'APP_KEY',
+             'DB_CONNECTION', 'DB_HOST', 'DB_PORT', 'DB_DATABASE',
+             'SESSION_DRIVER', 'CACHE_STORE'];
+
+    $mask = fn ($v) => $v === null || $v === false ? $v
+        : (in_array($v, [''], true) ? '' : (strlen((string) $v) > 80 ? substr((string) $v, 0, 40) . '…' : (string) $v));
+
+    $raw = [];
+    $viaEnv = [];
+    foreach ($keys as $k) {
+        $getenv = getenv($k);
+        $raw[$k] = [
+            'getenv' => $mask($getenv === false ? null : $getenv),
+            '_ENV' => $mask($_ENV[$k] ?? null),
+            '_SERVER' => $mask($_SERVER[$k] ?? null),
+        ];
+        $viaEnv[$k] = $mask(env($k));
+    }
+
+    $configCacheExists = file_exists(base_path('bootstrap/cache/config.php'));
+
     $report = [
         'php' => PHP_VERSION,
-        'env' => app()->environment(),
-        'debug' => config('app.debug'),
-        'app_key_set' => str_starts_with((string) config('app.key'), 'base64:'),
-        'url' => config('app.url'),
-        'session_driver' => config('session.driver'),
-        'cache_store' => config('cache.default'),
-        'db_connection' => config('database.default'),
+        'config_cache_exists' => $configCacheExists,
+        'env_file_exists' => file_exists(base_path('.env')),
+        'env_file_keys' => file_exists(base_path('.env'))
+            ? array_values(array_filter(array_map(
+                fn ($l) => preg_match('/^([A-Z_][A-Z0-9_]*)=/', trim($l), $m) ? $m[1] : null,
+                file(base_path('.env'))
+            )))
+            : [],
+
+        'raw_process_env' => $raw,
+        'laravel_env_helper' => $viaEnv,
+
+        'config' => [
+            'env' => app()->environment(),
+            'debug' => config('app.debug'),
+            'app_key_set' => str_starts_with((string) config('app.key'), 'base64:'),
+            'url' => config('app.url'),
+            'session_driver' => config('session.driver'),
+            'cache_store' => config('cache.default'),
+            'db_connection' => config('database.default'),
+        ],
     ];
+
     try {
         \DB::connection()->getPdo();
         $report['db'] = 'connected';
