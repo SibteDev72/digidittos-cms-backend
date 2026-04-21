@@ -36,22 +36,24 @@ for key in APP_ENV APP_DEBUG APP_URL APP_KEY DB_CONNECTION DB_HOST DB_PORT DB_DA
 done
 echo "=============================="
 
-# APP_KEY resolution.
+# APP_KEY resolution — three paths, in priority order:
 #
-# In production (Render/Docker Compose with env vars) Laravel reads
-# APP_KEY straight from the process environment — no `.env` file
-# needed. If it's already set we skip generation so the key stays
-# stable across deploys (regenerating on every boot would invalidate
-# all sessions and any encrypted columns).
-#
-# In local dev without an env var we create a throwaway `.env` and
-# let `php artisan key:generate` write to it.
-if [ -z "${APP_KEY:-}" ] || ! echo "${APP_KEY}" | grep -q "^base64:"; then
-    echo "APP_KEY not set in environment — generating a local one..."
-    [ -f .env ] || echo "APP_KEY=" > .env
-    php artisan key:generate --force
-else
+#   1) Shell env APP_KEY is valid (base64:…) → use it. Nothing to do.
+#   2) A .env file is present (e.g. mounted as a Render Secret File)
+#      AND it already contains a valid APP_KEY line → use it as-is.
+#      DO NOT call `key:generate --force` — that would overwrite the
+#      user-provided key and invalidate sessions / encrypted data.
+#   3) Neither is available → generate a throwaway one into .env
+#      so local dev / first-time containers don't crash.
+if [ -n "${APP_KEY:-}" ] && echo "${APP_KEY}" | grep -q "^base64:"; then
     echo "Using APP_KEY from environment."
+elif [ -f .env ] && grep -qE "^APP_KEY=base64:" .env; then
+    echo "Using APP_KEY from .env file (Secret File or committed)."
+else
+    echo "APP_KEY not set — generating a local one..."
+    [ -f .env ] || echo "APP_KEY=" > .env
+    grep -q "^APP_KEY=" .env || echo "APP_KEY=" >> .env
+    php artisan key:generate --force
 fi
 
 # Wait for PostgreSQL to be ready. Default port is 5432 (standard —

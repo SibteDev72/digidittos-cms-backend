@@ -54,5 +54,11 @@ RUN dos2unix /usr/local/bin/docker-entrypoint.sh \
 # and the CMD below honours it, so the container works in both envs.
 EXPOSE 9005
 
+# Use PHP's built-in server directly against public/index.php instead
+# of `php artisan serve`. Artisan's wrapper spawns subprocesses that
+# can lose env vars between the server boot and request handling,
+# which manifests as Laravel reading fallback config (sqlite,
+# http://localhost) even when the container has the right env set.
+# Hitting public/index.php directly keeps everything in one process.
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-9005}"]
+CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-9005} -t public public/index.php"]
