@@ -1,0 +1,77 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: digidittos-cms-backend:latest
+    container_name: digidittos-cms-backend
+    ports:
+      - "9005:9005"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5434
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - storage_data:/var/www/storage/app/public
+    networks:
+      - digidittos-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: digidittos-cms-postgres
+    command: -p 5434
+    ports:
+      - "5434:5434"
+    environment:
+      - POSTGRES_DB=${DB_DATABASE:-digidittos_cms}
+      - POSTGRES_USER=${DB_USERNAME:-digidittos}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-secret}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-digidittos} -p 5434"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - digidittos-network
+    restart: unless-stopped
+
+  scheduler:
+    # Reuses the image built by the `backend` service — do NOT declare a
+    # second `build:` block here or BuildKit will race to tag the same
+    # image name twice and error with "image already exists".
+    image: digidittos-cms-backend:latest
+    container_name: digidittos-cms-scheduler
+    entrypoint: []
+    command: ["php", "artisan", "schedule:work"]
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5434
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - storage_data:/var/www/storage/app/public
+    networks:
+      - digidittos-network
+    restart: unless-stopped
+    pull_policy: never
+
+volumes:
+  pgdata:
+  storage_data:
+
+networks:
+  digidittos-network:
+    name: digidittos-network
+    driver: bridge
