@@ -57,10 +57,13 @@ mkdir -p /var/www/storage/framework/{sessions,views,cache/data} \
 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
 chmod -R ug+rw /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
 
-# Refresh config/route/view caches so new env values take effect
+# Refresh config/route/view caches so new env values take effect.
+# We explicitly clear (not cache) so env var changes always win on
+# the next request without a rebuild.
 php artisan config:clear
 php artisan route:clear
 php artisan view:clear 2>/dev/null || true
+php artisan cache:clear 2>/dev/null || true
 
 echo "DigiDittos CMS backend is ready!"
 
