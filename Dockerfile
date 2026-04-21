@@ -49,7 +49,9 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN dos2unix /usr/local/bin/docker-entrypoint.sh \
     && chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# 9005 is the local default; Render injects its own $PORT at runtime
+# and the CMD below honours it, so the container works in both envs.
 EXPOSE 9005
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=9005"]
+CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-9005}"]

@@ -14,9 +14,11 @@ if ! grep -q "^APP_KEY=base64:" .env 2>/dev/null; then
     php artisan key:generate --force
 fi
 
-# Wait for PostgreSQL to be ready
-echo "Waiting for PostgreSQL at ${DB_HOST:-postgres}:${DB_PORT:-5434}..."
-until php -r "new PDO('pgsql:host=${DB_HOST:-postgres};port=${DB_PORT:-5434};dbname=${DB_DATABASE:-digidittos_cms}', '${DB_USERNAME:-digidittos}', '${DB_PASSWORD:-secret}');" 2>/dev/null; do
+# Wait for PostgreSQL to be ready. Default port is 5432 (standard —
+# matches Render's managed Postgres). Local docker-compose overrides
+# it to 5434 via DB_PORT in .env.
+echo "Waiting for PostgreSQL at ${DB_HOST:-postgres}:${DB_PORT:-5432}..."
+until php -r "new PDO('pgsql:host=${DB_HOST:-postgres};port=${DB_PORT:-5432};dbname=${DB_DATABASE:-digidittos_cms}', '${DB_USERNAME:-digidittos}', '${DB_PASSWORD:-secret}');" 2>/dev/null; do
     echo "PostgreSQL not ready yet, retrying in 2s..."
     sleep 2
 done
