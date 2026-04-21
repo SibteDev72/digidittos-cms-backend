@@ -47,9 +47,20 @@ mkdir -p /var/www/storage/app/public/uploads/media \
          /var/www/storage/app/public/uploads/services
 chown -R www-data:www-data /var/www/storage/app/public/uploads
 
-# Refresh config/route caches so new env values take effect
+# Make sure Laravel's framework dirs are writable — Render's
+# persistent disk remounts /var/www/storage/app/public at runtime
+# and can shadow the perms set during the image build.
+mkdir -p /var/www/storage/framework/{sessions,views,cache/data} \
+         /var/www/storage/logs \
+         /var/www/bootstrap/cache \
+         /var/www/storage/app/public
+chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
+chmod -R ug+rw /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
+
+# Refresh config/route/view caches so new env values take effect
 php artisan config:clear
 php artisan route:clear
+php artisan view:clear 2>/dev/null || true
 
 echo "DigiDittos CMS backend is ready!"
 
