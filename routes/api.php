@@ -19,6 +19,34 @@ use App\Http\Controllers\Api\LiveAvatarController;
 use App\Http\Controllers\Api\DemoRequestController;
 use App\Http\Controllers\Api\ContactController;
 
+// Deployment diagnostic — safe to leave in place; returns bootstrap
+// health (DB connectivity, session/cache drivers, key table presence)
+// so we can diagnose 500s without needing shell access on Render.
+// Hit GET /api/__diag to see JSON status.
+Route::get('/__diag', function () {
+    $report = [
+        'php' => PHP_VERSION,
+        'env' => app()->environment(),
+        'debug' => config('app.debug'),
+        'app_key_set' => str_starts_with((string) config('app.key'), 'base64:'),
+        'url' => config('app.url'),
+        'session_driver' => config('session.driver'),
+        'cache_store' => config('cache.default'),
+        'db_connection' => config('database.default'),
+    ];
+    try {
+        \DB::connection()->getPdo();
+        $report['db'] = 'connected';
+        $report['db_name'] = \DB::connection()->getDatabaseName();
+        foreach (['sessions', 'cache', 'users', 'migrations', 'site_settings'] as $t) {
+            $report['tables'][$t] = \Schema::hasTable($t);
+        }
+    } catch (\Throwable $e) {
+        $report['db'] = 'FAILED: ' . $e->getMessage();
+    }
+    return response()->json($report);
+});
+
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/public/pricing', [PricingController::class, 'publicIndex']);

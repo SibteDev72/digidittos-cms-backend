@@ -67,4 +67,14 @@ php artisan cache:clear 2>/dev/null || true
 
 echo "DigiDittos CMS backend is ready!"
 
+# Stream Laravel's own log to stdout so exceptions show up in Render's
+# log viewer. Without this, a bootstrap-time exception only lands in
+# storage/logs/laravel.log and the request returns Symfony's generic
+# 500 page with no way to see what threw.
+LOG_FILE=/var/www/storage/logs/laravel.log
+touch "$LOG_FILE" 2>/dev/null || true
+chown www-data:www-data "$LOG_FILE" 2>/dev/null || true
+chmod 664 "$LOG_FILE" 2>/dev/null || true
+tail -n 0 -F "$LOG_FILE" 2>/dev/null &
+
 exec "$@"
