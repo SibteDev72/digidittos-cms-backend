@@ -35,9 +35,10 @@ RUN composer install --no-scripts --no-autoloader --no-interaction
 # App source
 COPY . .
 
-# Autoload + .env bootstrap
-RUN composer dump-autoload --optimize \
-    && if [ ! -f .env ]; then cp .env.example .env; fi
+# Autoload — Laravel reads config from real env vars at runtime
+# (Render injects them directly), so we don't need a .env file in
+# the image. `.env.example` isn't committed so we can't copy it.
+RUN composer dump-autoload --optimize
 
 # Storage dirs + perms
 RUN mkdir -p storage/framework/{sessions,views,cache/data} storage/logs bootstrap/cache \

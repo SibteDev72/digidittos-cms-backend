@@ -3,15 +3,22 @@ set -e
 
 cd /var/www
 
-# Ensure .env exists (fallback to .env.example)
-if [ ! -f .env ] && [ -f .env.example ]; then
-    cp .env.example .env
-fi
-
-# Generate APP_KEY if missing
-if ! grep -q "^APP_KEY=base64:" .env 2>/dev/null; then
-    echo "Generating application key..."
+# APP_KEY resolution.
+#
+# In production (Render/Docker Compose with env vars) Laravel reads
+# APP_KEY straight from the process environment — no `.env` file
+# needed. If it's already set we skip generation so the key stays
+# stable across deploys (regenerating on every boot would invalidate
+# all sessions and any encrypted columns).
+#
+# In local dev without an env var we create a throwaway `.env` and
+# let `php artisan key:generate` write to it.
+if [ -z "${APP_KEY:-}" ] || ! echo "${APP_KEY}" | grep -q "^base64:"; then
+    echo "APP_KEY not set in environment — generating a local one..."
+    [ -f .env ] || echo "APP_KEY=" > .env
     php artisan key:generate --force
+else
+    echo "Using APP_KEY from environment."
 fi
 
 # Wait for PostgreSQL to be ready. Default port is 5432 (standard —
