@@ -9,19 +9,33 @@ define('LARAVEL_START', microtime(true));
 // PHP's built-in server (`php -S`) on Render doesn't reliably
 // follow the `public/storage` symlink into the persistent disk
 // mount, so `/storage/foo.png` requests fall through to Laravel
-// and get routed to `/`. Handling them here, before Laravel
-// boots, avoids the whole mess — faster too, since we skip the
-// framework bootstrap for every static asset request.
+// and get routed to `/` (or 404). Handling them here, before
+// Laravel boots, avoids the whole mess — faster too, since we
+// skip the framework bootstrap for every static asset request.
 if (isset($_SERVER['REQUEST_URI']) && str_starts_with($_SERVER['REQUEST_URI'], '/storage/')) {
-    $rel = substr(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), strlen('/storage/'));
-    $rel = urldecode($rel);
+    $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    $rel = urldecode(substr($path, strlen('/storage/')));
 
-    // Block path traversal — no leading slash, no `..` segments.
-    if ($rel !== '' && !str_contains($rel, '..') && !str_starts_with($rel, '/')) {
-        $base = realpath(__DIR__ . '/../storage/app/public');
-        $file = $base ? realpath($base . '/' . $rel) : false;
+    // Block path traversal — no `..` segments, no leading slash.
+    $traversalSafe = $rel !== ''
+        && !str_contains($rel, '..')
+        && !str_starts_with($rel, '/')
+        && !str_starts_with($rel, '\\');
 
-        if ($file && str_starts_with($file, $base . DIRECTORY_SEPARATOR) && is_file($file)) {
+    if ($traversalSafe) {
+        // Resolve `storage/app/public` to an absolute path ONCE at the
+        // app root (one level up from /public) instead of relying on
+        // `../` traversal through the request's filesystem position.
+        // When the OS mounts a persistent disk at the storage path,
+        // relative-path traversal can cross a mount boundary that
+        // PHP's `is_file()` handles inconsistently. Absolute paths
+        // resolve the target directly and avoid the boundary dance.
+        $appRoot = dirname(__DIR__);
+        $base = $appRoot . '/storage/app/public/';
+        $file = $base . $rel;
+        clearstatcache(true, $file);
+
+        if (is_file($file) && is_readable($file)) {
             $mimes = [
                 'png'  => 'image/png',
                 'jpg'  => 'image/jpeg',
@@ -29,6 +43,7 @@ if (isset($_SERVER['REQUEST_URI']) && str_starts_with($_SERVER['REQUEST_URI'], '
                 'gif'  => 'image/gif',
                 'webp' => 'image/webp',
                 'svg'  => 'image/svg+xml',
+                'avif' => 'image/avif',
                 'mp4'  => 'video/mp4',
                 'webm' => 'video/webm',
                 'ogg'  => 'video/ogg',
@@ -36,7 +51,8 @@ if (isset($_SERVER['REQUEST_URI']) && str_starts_with($_SERVER['REQUEST_URI'], '
                 'pdf'  => 'application/pdf',
             ];
             $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-            $mime = $mimes[$ext] ?? (function_exists('mime_content_type') ? mime_content_type($file) : 'application/octet-stream');
+            $mime = $mimes[$ext]
+                ?? (function_exists('mime_content_type') ? (mime_content_type($file) ?: 'application/octet-stream') : 'application/octet-stream');
 
             header('Content-Type: ' . $mime);
             header('Content-Length: ' . filesize($file));
@@ -45,8 +61,14 @@ if (isset($_SERVER['REQUEST_URI']) && str_starts_with($_SERVER['REQUEST_URI'], '
             readfile($file);
             exit;
         }
+
+        // Debug header — visible in response headers when the file lookup
+        // fails, so we can tell whether our interceptor ran and why it
+        // bailed. Remove once storage serving is verified stable.
+        header('X-Storage-Miss: ' . (is_file($file) ? 'not-readable' : 'not-found'));
+        header('X-Storage-Path: ' . $file);
     }
-    // File not found — fall through so Laravel can return a 404.
+    // File not found / unreadable → fall through so Laravel returns 404.
 }
 
 // Determine if the application is in maintenance mode...
