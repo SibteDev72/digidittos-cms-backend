@@ -19,6 +19,39 @@ use App\Http\Controllers\Api\LiveAvatarController;
 use App\Http\Controllers\Api\DemoRequestController;
 use App\Http\Controllers\Api\ContactController;
 
+// Storage diag — confirms the Render persistent disk is mounted,
+// the public-storage symlink is intact, and how many uploaded files
+// actually made it to disk. Hit GET /api/__storage-diag.
+Route::get('/__storage-diag', function () {
+    $publicDisk = storage_path('app/public');
+    $mediaDir = $publicDisk . '/uploads/media';
+    $symlink = public_path('storage');
+
+    $countFiles = function (string $dir) {
+        if (!is_dir($dir)) return 0;
+        return count(array_filter(scandir($dir), fn ($f) => $f !== '.' && $f !== '..'));
+    };
+
+    return response()->json([
+        'storage_path' => $publicDisk,
+        'storage_exists' => is_dir($publicDisk),
+        'storage_writable' => is_writable($publicDisk),
+        'media_dir_exists' => is_dir($mediaDir),
+        'media_dir_writable' => is_dir($mediaDir) ? is_writable($mediaDir) : null,
+        'media_file_count' => $countFiles($mediaDir),
+        'public_storage_symlink_exists' => file_exists($symlink),
+        'public_storage_is_link' => is_link($symlink),
+        'public_storage_link_target' => is_link($symlink) ? readlink($symlink) : null,
+        'app_url' => config('app.url'),
+        'filesystem_disk' => config('filesystems.default'),
+        'public_disk_url' => config('filesystems.disks.public.url'),
+        // First 5 filenames in media dir (if any) for sanity check
+        'sample_files' => is_dir($mediaDir)
+            ? array_slice(array_values(array_filter(scandir($mediaDir), fn ($f) => $f !== '.' && $f !== '..')), 0, 5)
+            : [],
+    ]);
+});
+
 // Deployment diagnostic — safe to leave in place; returns bootstrap
 // health (DB connectivity, session/cache drivers, key table presence)
 // so we can diagnose 500s without needing shell access on Render.
