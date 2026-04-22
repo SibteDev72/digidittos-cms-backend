@@ -27,7 +27,7 @@ return [
     //   - https://cms.digidittos.com   → prod CMS admin
     'allowed_origins' => explode(',', env(
         'CORS_ALLOWED_ORIGINS',
-        'http://localhost:5004,http://localhost:3000,https://digidittos-cms-frontend.vercel.app,https://www.digidittos.com,https://digidittos.com,https://cms.digidittos.com'
+        'http://localhost:5004,http://localhost:3000,https://digidittos-cms-frontend.vercel.app,https://www.digidittos.com,https://digidittos.com,https://admin.digidittos.com'
     )),
 
     'allowed_origins_patterns' => [],
